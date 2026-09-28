@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "author": "Antigravity",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-s3-devkitc-1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-lcd-gc9a01",
+      "id": "lcd",
+      "top": -80,
+      "left": 180,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn_rec",
+      "top": 120,
+      "left": 180,
+      "attrs": { "color": "red", "label": "Gravar Voz" }
+    }
+  ],
+  "connections": [
+    [ "esp:11", "lcd:SDA", "", [] ],
+    [ "esp:12", "lcd:SCL", "", [] ],
+    [ "esp:10", "lcd:CS", "", [] ],
+    [ "esp:9", "lcd:DC", "", [] ],
+    [ "esp:14", "lcd:RES", "", [] ],
+    [ "esp:GND.1", "lcd:GND", "", [] ],
+    [ "esp:3V3.1", "lcd:VCC", "", [] ],
+    [ "esp:4", "btn_rec:1.l", "", [] ],
+    [ "esp:GND.2", "btn_rec:2.l", "", [] ]
+  ]
+}

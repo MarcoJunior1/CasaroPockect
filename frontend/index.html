@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casaro – Simulador do Colar IA</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Segoe UI', sans-serif;
+    overflow: hidden;
+  }
+
+  /* Partículas de fundo */
+  .bg-particles {
+    position: fixed; inset: 0; overflow: hidden; pointer-events: none;
+  }
+  .particle {
+    position: absolute; width: 2px; height: 2px;
+    background: #00ff88; border-radius: 50%;
+    animation: float linear infinite;
+    opacity: 0;
+  }
+  @keyframes float {
+    0%   { transform: translateY(100vh) translateX(0); opacity: 0; }
+    10%  { opacity: 0.6; }
+    90%  { opacity: 0.3; }
+    100% { transform: translateY(-10vh) translateX(30px); opacity: 0; }
+  }
+
+  /* Dispositivo – representação do colar */
+  .device-wrapper {
+    display: flex;
+    gap: 60px;
+    align-items: center;
+  }
+
+  /* Display circular */
+  .display-container {
+    position: relative;
+    width: 280px; height: 280px;
+  }
+
+  /* Anéis externos decorativos */
+  .ring-outer {
+    position: absolute; inset: -14px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,255,136,0.15);
+    animation: ring-pulse 3s ease-in-out infinite;
+  }
+  .ring-outer-2 {
+    position: absolute; inset: -24px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,255,136,0.07);
+    animation: ring-pulse 3s ease-in-out infinite 0.5s;
+  }
+  @keyframes ring-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50%       { transform: scale(1.02); opacity: 1; }
+  }
+
+  /* O "vidro" da tela circular */
+  .display {
+    position: relative;
+    width: 280px; height: 280px;
+    border-radius: 50%;
+    background: #050510;
+    border: 3px solid #00ff88;
+    box-shadow:
+      0 0 30px rgba(0,255,136,0.3),
+      0 0 60px rgba(0,255,136,0.1),
+      inset 0 0 40px rgba(0,0,0,0.8);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .display.recording {
+    border-color: #ff4444;
+    box-shadow: 0 0 30px rgba(255,68,68,0.4), 0 0 60px rgba(255,68,68,0.15), inset 0 0 40px rgba(0,0,0,0.8);
+  }
+  .display.speaking {
+    border-color: #00ff88;
+    box-shadow: 0 0 40px rgba(0,255,136,0.5), 0 0 80px rgba(0,255,136,0.2), inset 0 0 40px rgba(0,0,0,0.8);
+  }
+
+  /* Status bar */
+  .status-bar {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 44px;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(0,255,136,0.2);
+    z-index: 10;
+  }
+
+  .status-item {
+    display: flex; align-items: center; gap: 4px;
+  }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #00ff88;
+  }
+  .status-dot.off { background: #444; }
+  .status-dot.red { background: #ff4444; animation: blink 0.8s infinite; }
+  .status-text { color: #aaa; }
+  .status-text.on  { color: #00ff88; }
+  .status-text.off { color: #555; }
+  .status-text.red { color: #ff4444; }
+
+  .mode-badge {
+    font-size: 8px; font-weight: 700; padding: 2px 7px;
+    border-radius: 8px; letter-spacing: 1px;
+  }
+  .mode-online  { background: rgba(0,255,136,0.15); color: #00ff88; border: 1px solid rgba(0,255,136,0.3); }
+  .mode-offline { background: rgba(255,160,50,0.15); color: #ffa032; border: 1px solid rgba(255,160,50,0.3); }
+  .mode-demo    { background: rgba(255,220,50,0.15); color: #ffdc32; border: 1px solid rgba(255,220,50,0.3); }
+
+  /* Avatar central */
+  .avatar-zone {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -60%);
+    text-align: center;
+    z-index: 5;
+  }
+
+  .avatar-circle {
+    width: 110px; height: 110px; border-radius: 50%;
+    background: rgba(0,255,136,0.06);
+    border: 2px solid rgba(0,255,136,0.3);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 10px;
+    position: relative;
+    transition: border-color 0.3s;
+  }
+  .avatar-circle.rec-mode {
+    border-color: rgba(255,68,68,0.6);
+    background: rgba(255,68,68,0.06);
+    animation: rec-pulse 1s ease-in-out infinite;
+  }
+  @keyframes rec-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,68,68,0.3); }
+    50%       { box-shadow: 0 0 0 10px rgba(255,68,68,0); }
+  }
+
+  .avatar-face {
+    font-size: 28px;
+    font-family: monospace;
+    color: #00ff88;
+    transition: color 0.3s;
+    user-select: none;
+  }
+  .avatar-face.rec  { color: #ff4444; }
+  .avatar-face.speak { color: #00ff88; }
+  .avatar-face.wait { color: #ffdc32; }
+
+  .avatar-name {
+    font-size: 16px; font-weight: 700;
+    color: #fff; letter-spacing: 3px;
+    text-shadow: 0 0 10px rgba(0,255,136,0.5);
+  }
+  .avatar-subtitle-label {
+    font-size: 8px; color: #555; letter-spacing: 2px; margin-top: 2px;
+  }
+
+  /* Onda de voz (waveform) */
+  .waveform {
+    position: absolute;
+    bottom: 58px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 3px; align-items: center;
+    height: 24px; z-index: 5;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .waveform.active { opacity: 1; }
+  .wave-bar {
+    width: 3px; border-radius: 2px;
+    background: #00ff88;
+    animation: wave-anim 0.8s ease-in-out infinite;
+  }
+  .wave-bar:nth-child(1) { animation-delay: 0.0s; }
+  .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+  .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+  .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+  .wave-bar:nth-child(5) { animation-delay: 0.2s; }
+  .wave-bar:nth-child(6) { animation-delay: 0.1s; }
+  .wave-bar:nth-child(7) { animation-delay: 0.0s; }
+  @keyframes wave-anim {
+    0%, 100% { height: 4px; }
+    50%       { height: 20px; }
+  }
+  .waveform.red .wave-bar { background: #ff4444; }
+
+  /* Legenda deslizante */
+  .subtitle-bar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 50px;
+    background: rgba(0,0,0,0.75);
+    border-top: 1px solid rgba(0,255,136,0.2);
+    overflow: hidden;
+    display: flex; align-items: center;
+    z-index: 10;
+  }
+  .subtitle-scroll {
+    white-space: nowrap;
+    font-size: 10px; color: #ccc; letter-spacing: 0.3px;
+    animation: scroll-text 18s linear infinite;
+    padding-left: 280px;
+  }
+  @keyframes scroll-text {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+  }
+
+  /* Painel lateral de controles */
+  .controls-panel {
+    display: flex; flex-direction: column;
+    gap: 16px; width: 220px;
+  }
+
+  .panel-title {
+    color: #00ff88; font-size: 11px; font-weight: 700;
+    letter-spacing: 2px; text-transform: uppercase;
+    border-bottom: 1px solid rgba(0,255,136,0.2);
+    padding-bottom: 8px; margin-bottom: 4px;
+  }
+
+  /* Botão principal de gravar */
+  .btn-record {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    border: 2px solid #ff4444;
+    background: rgba(255,68,68,0.1);
+    color: #ff4444;
+    font-size: 13px; font-weight: 700;
+    letter-spacing: 1px; cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-record:hover { background: rgba(255,68,68,0.2); transform: scale(1.02); }
+  .btn-record.recording {
+    background: rgba(255,68,68,0.25);
+    box-shadow: 0 0 20px rgba(255,68,68,0.3);
+    animation: btn-pulse 1s infinite;
+  }
+  @keyframes btn-pulse { 0%,100%{box-shadow:0 0 10px rgba(255,68,68,0.3);} 50%{box-shadow:0 0 25px rgba(255,68,68,0.6);} }
+
+  /* Seletor de modo */
+  .mode-selector { display: flex; gap: 6px; }
+  .mode-btn {
+    flex: 1; padding: 8px 4px;
+    border-radius: 8px; border: 1px solid #333;
+    background: transparent;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+    cursor: pointer; transition: all 0.2s; color: #555;
+  }
+  .mode-btn.active-online  { border-color: #00ff88; background: rgba(0,255,136,0.1); color: #00ff88; }
+  .mode-btn.active-offline { border-color: #ffa032; background: rgba(255,160,50,0.1); color: #ffa032; }
+  .mode-btn.active-demo    { border-color: #ffdc32; background: rgba(255,220,50,0.1); color: #ffdc32; }
+
+  /* Caixa de texto (RF19) */
+  .text-input-area { display: flex; gap: 6px; }
+  .text-input-area input {
+    flex: 1; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid #333; background: #111;
+    color: #fff; font-size: 12px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .text-input-area input:focus { border-color: #00ff88; }
+  .btn-send {
+    padding: 10px 14px; border-radius: 8px;
+    border: 1px solid #00ff88; background: rgba(0,255,136,0.1);
+    color: #00ff88; font-size: 12px; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-send:hover { background: rgba(0,255,136,0.2); }
+
+  /* Log / transcrição */
+  .log-box {
+    background: #0a0a0a; border: 1px solid #1a1a1a;
+    border-radius: 10px; padding: 12px;
+    font-size: 10px; line-height: 1.6; max-height: 160px;
+    overflow-y: auto;
+  }
+  .log-box::-webkit-scrollbar { width: 4px; }
+  .log-box::-webkit-scrollbar-track { background: #0a0a0a; }
+  .log-box::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+  .log-entry { margin-bottom: 8px; }
+  .log-label { font-size: 8px; letter-spacing: 1px; font-weight: 700; margin-bottom: 2px; }
+  .log-you   { color: #5599ff; }
+  .log-ai    { color: #00ff88; }
+  .log-sys   { color: #ffa032; }
+  .log-text  { color: #bbb; }
+
+  /* Player de áudio */
+  audio { width: 100%; border-radius: 6px; filter: invert(1); opacity: 0.7; }
+  .audio-wrapper { display: none; }
+  .audio-wrapper.visible { display: block; }
+
+  /* Animação @keyframes blink */
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0;} }
+
+  /* Responsivo */
+  @media (max-width: 640px) {
+    .device-wrapper { flex-direction: column; gap: 30px; }
+    .controls-panel { width: 280px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Partículas de fundo -->
+<div class="bg-particles" id="particles"></div>
+
+<div class="device-wrapper">
+
+  <!-- DISPLAY CIRCULAR -->
+  <div class="display-container">
+    <div class="ring-outer"></div>
+    <div class="ring-outer-2"></div>
+    <div class="display" id="display">
+
+      <!-- Status Bar -->
+      <div class="status-bar">
+        <div class="status-item">
+          <div class="status-dot" id="dot-wifi"></div>
+          <span class="status-text on" id="txt-wifi">WiFi</span>
+        </div>
+        <span class="mode-badge mode-online" id="mode-badge">ONLINE</span>
+        <div class="status-item">
+          <div class="status-dot off"></div>
+          <span class="status-text off">BT</span>
+          &nbsp;
+          <div class="status-dot" style="background:#00ff88; width:8px; height:8px;"></div>
+          <span class="status-text on">95%</span>
+        </div>
+      </div>
+
+      <!-- Avatar -->
+      <div class="avatar-zone">
+        <div class="avatar-circle" id="avatar-circle">
+          <span class="avatar-face" id="avatar-face">(o_o)</span>
+        </div>
+        <div class="avatar-name">CASARO</div>
+        <div class="avatar-subtitle-label">ASSISTENTE VESTÍVEL IA</div>
+      </div>
+
+      <!-- Waveform -->
+      <div class="waveform" id="waveform">
+        <div class="wave-bar" style="height:8px"></div>
+        <div class="wave-bar" style="height:14px"></div>
+        <div class="wave-bar" style="height:20px"></div>
+        <div class="wave-bar" style="height:16px"></div>
+        <div class="wave-bar" style="height:22px"></div>
+        <div class="wave-bar" style="height:14px"></div>
+        <div class="wave-bar" style="height:8px"></div>
+      </div>
+
+      <!-- Legenda -->
+      <div class="subtitle-bar">
+        <div class="subtitle-scroll" id="subtitle">
+          Olá! Eu sou o Casaro, seu assistente vestível com IA. Aperte o botão para falar ou digite uma pergunta ao lado.
+        </div>
+      </div>
+
+    </div><!-- .display -->
+  </div><!-- .display-container -->
+
+  <!-- PAINEL DE CONTROLES -->
+  <div class="controls-panel">
+    <div class="panel-title">⚙ Controles do Colar</div>
+
+    <!-- Modo RF04/RF28 -->
+    <div>
+      <div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:6px;">MODO DE OPERAÇÃO</div>
+      <div class="mode-selector">
+        <button class="mode-btn active-online" onclick="setMode('online')">ONLINE</button>
+        <button class="mode-btn" onclick="setMode('offline')">OFFLINE</button>
+        <button class="mode-btn" onclick="setMode('demo')">DEMO</button>
+      </div>
+    </div>
+
+    <!-- Botão de gravar -->
+    <button class="btn-record" id="btn-record" onclick="toggleRecord()">
+      <span id="btn-icon">🎙</span>
+      <span id="btn-text">GRAVAR VOZ</span>
+    </button>
+
+    <!-- RF19: Entrada de texto -->
+    <div>
+      <div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:6px;">ENVIAR TEXTO (RF19)</div>
+      <div class="text-input-area">
+        <input type="text" id="text-input" placeholder="Digite uma pergunta..." onkeydown="if(event.key==='Enter')sendText()">
+        <button class="btn-send" onclick="sendText()">➤</button>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div>
+      <div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:6px;">LOG DE CONVERSA</div>
+      <div class="log-box" id="log-box">
+        <div class="log-entry">
+          <div class="log-label log-sys">SISTEMA</div>
+          <div class="log-text">Casaro iniciado. Aguardando interação.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player -->
+    <div class="audio-wrapper" id="audio-wrapper">
+      <div style="font-size:9px;color:#555;letter-spacing:1px;margin-bottom:6px;">RESPOSTA EM ÁUDIO</div>
+      <audio id="audio-player" controls></audio>
+    </div>
+
+  </div><!-- .controls-panel -->
+</div><!-- .device-wrapper -->
+
+<script>
+// ========================
+// ESTADO
+// ========================
+let mode = 'online';
+let state = 'idle'; // idle | recording | waiting | speaking
+let mediaRecorder = null;
+let audioChunks = [];
+let avatarInterval = null;
+let avatarFrame = 0;
+
+// Respostas demo (RF20)
+const demoMap = [
+  { k: ['hora','horas','tempo'],   r: 'São por volta das 10h da manhã. Para a hora exata, conecte ao WiFi!' },
+  { k: ['nome','quem','casaro'],   r: 'Eu sou o Casaro! Seu assistente vestível com inteligência artificial.' },
+  { k: ['piada','engraçado'],      r: 'Por que o computador foi ao médico? Porque tinha um vírus!' },
+  { k: ['bateria','energia'],      r: 'Bateria em 95 por cento. Tudo certo!' },
+  { k: ['clima','chuva'],          r: 'Não consigo verificar o clima offline. Conecte ao WiFi!' },
+  { k: ['ajuda','help','oi','olá'],r: 'Estou aqui para te ajudar! Pode falar, me mandar áudio ou digitar.' },
+];
+
+function getDemoResponse(text) {
+  const t = text.toLowerCase();
+  for (const item of demoMap) {
+    if (item.k.some(k => t.includes(k))) return item.r;
+  }
+  return 'Comando não reconhecido no modo offline. Tente: hora, nome, piada ou bateria.';
+}
+
+// ========================
+// MODO (RF04/RF28)
+// ========================
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.className = 'mode-btn';
+    if (b.textContent.toLowerCase() === m) {
+      b.className = `mode-btn active-${m}`;
+    }
+  });
+  const badge = document.getElementById('mode-badge');
+  badge.textContent = m.toUpperCase();
+  badge.className = `mode-badge mode-${m}`;
+  updateDisplay();
+  addLog('sys', `Modo alterado para: ${m.toUpperCase()}`);
+  setSubtitle(`Modo ${m.toUpperCase()} ativado!`);
+}
+
+// ========================
+// UI HELPERS
+// ========================
+function setSubtitle(text) {
+  const el = document.getElementById('subtitle');
+  el.textContent = text + '   ';
+  el.style.animation = 'none';
+  el.offsetHeight; // reflow
+  el.style.animation = '';
+}
+
+function addLog(type, text) {
+  const box = document.getElementById('log-box');
+  const labels = { you: '🎙 VOCÊ', ai: '🤖 CASARO', sys: '⚙ SISTEMA' };
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<div class="log-label log-${type}">${labels[type]}</div><div class="log-text">${text}</div>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function updateDisplay() {
+  const display   = document.getElementById('display');
+  const circle    = document.getElementById('avatar-circle');
+  const face      = document.getElementById('avatar-face');
+  const waveform  = document.getElementById('waveform');
+  const btnRec    = document.getElementById('btn-record');
+  const btnIcon   = document.getElementById('btn-icon');
+  const btnText   = document.getElementById('btn-text');
+  const dotWifi   = document.getElementById('dot-wifi');
+  const txtWifi   = document.getElementById('txt-wifi');
+
+  // WiFi dot
+  const isOnline = mode === 'online';
+  dotWifi.className = 'status-dot' + (isOnline ? '' : ' off');
+  txtWifi.className = 'status-text' + (isOnline ? ' on' : ' off');
+
+  // Display ring + face
+  display.className = 'display ' + (state === 'recording' ? 'recording' : state === 'speaking' ? 'speaking' : '');
+  circle.className  = 'avatar-circle' + (state === 'recording' ? ' rec-mode' : '');
+  waveform.className = 'waveform' + (state === 'recording' ? ' active red' : state === 'speaking' ? ' active' : '');
+
+  // Botão
+  if (state === 'recording') {
+    btnRec.className = 'btn-record recording';
+    btnIcon.textContent = '⏹';
+    btnText.textContent = 'PARAR GRAVAÇÃO';
+  } else {
+    btnRec.className = 'btn-record';
+    btnIcon.textContent = '🎙';
+    btnText.textContent = 'GRAVAR VOZ';
+  }
+}
+
+// Avatar animado
+function startAvatarAnim(type) {
+  stopAvatarAnim();
+  const face = document.getElementById('avatar-face');
+  if (type === 'recording') {
+    face.className = 'avatar-face rec';
+    let r = true;
+    avatarInterval = setInterval(() => {
+      face.textContent = r ? '( REC )' : '(     )';
+      r = !r;
+    }, 600);
+  } else if (type === 'waiting') {
+    face.className = 'avatar-face wait';
+    const dots = ['(  .  )','(  .. )', '( ... )','(  .. )'];
+    let i = 0;
+    avatarInterval = setInterval(() => { face.textContent = dots[i++ % dots.length]; }, 400);
+  } else if (type === 'speaking') {
+    face.className = 'avatar-face speak';
+    const frames = ['(^O^)','(^-^)','( ─ )','(^-^)'];
+    let i = 0;
+    avatarInterval = setInterval(() => { face.textContent = frames[i++ % frames.length]; }, 350);
+  } else {
+    face.className = 'avatar-face';
+    const idle = ['(o_o)','(o_o)','(o_o)','(-_-)','(o_o)','(o_o)','(o_o)','(^_^)'];
+    let i = 0;
+    avatarInterval = setInterval(() => { face.textContent = idle[i++ % idle.length]; }, 700);
+  }
+}
+function stopAvatarAnim() {
+  if (avatarInterval) clearInterval(avatarInterval);
+}
+
+// ========================
+// GRAVAÇÃO (RF11)
+// ========================
+async function toggleRecord() {
+  if (state === 'recording') {
+    stopRecord();
+  } else {
+    await startRecord();
+  }
+}
+
+async function startRecord() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(audioChunks, { type: 'audio/webm' });
+      stream.getTracks().forEach(t => t.stop());
+      await processAudio(blob);
+    };
+    mediaRecorder.start();
+    state = 'recording';
+    updateDisplay();
+    startAvatarAnim('recording');
+    setSubtitle('Escutando... Fale agora com o Casaro!');
+    addLog('sys', 'Microfone ativado. Gravando... (RF47: MIC ATIVO)');
+  } catch (e) {
+    addLog('sys', '⚠ Permissão de microfone negada.');
+  }
+}
+
+function stopRecord() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  state = 'waiting';
+  updateDisplay();
+  startAvatarAnim('waiting');
+  setSubtitle('Processando...');
+  addLog('sys', 'Gravação encerrada. Enviando para a IA...');
+}
+
+// ========================
+// RF19: TEXTO DIRETO
+// ========================
+async function sendText() {
+  const input = document.getElementById('text-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addLog('you', text);
+
+  if (mode === 'online') {
+    state = 'waiting';
+    updateDisplay();
+    startAvatarAnim('waiting');
+    setSubtitle('Processando: "' + text + '"');
+    await callApiText(text);
+  } else {
+    // RF20/RF34: resposta local
+    await sleep(700);
+    const resp = getDemoResponse(text);
+    showResponse(resp, null);
+  }
+}
+
+// ========================
+// ENVIO PARA API
+// ========================
+async function processAudio(blob) {
+  if (mode !== 'online') {
+    // RF20: modo offline/demo
+    await sleep(800);
+    showResponse(getDemoResponse('audio'), null);
+    return;
+  }
+  const formData = new FormData();
+  formData.append('audio', blob, 'recording.webm');
+  await callApi(formData);
+}
+
+async function callApiText(text) {
+  const formData = new FormData();
+  formData.append('text_input', text);
+  await callApi(formData);
+}
+
+async function callApi(formData) {
+  try {
+    const res = await fetch('http://localhost:8000/chat', { method: 'POST', body: formData });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const rawYou = res.headers.get('X-Transcribed-Text');
+    const rawAI  = res.headers.get('X-AI-Response');
+    const youText = rawYou ? decodeURIComponent(rawYou) : '';
+    const aiText  = rawAI  ? decodeURIComponent(rawAI)  : '';
+
+    if (youText) addLog('you', youText);
+    const audioBlob = await res.blob();
+    showResponse(aiText, audioBlob);
+  } catch (err) {
+    addLog('sys', '⚠ Erro ao conectar com o backend: ' + err.message);
+    state = 'idle';
+    updateDisplay();
+    startAvatarAnim('idle');
+    setSubtitle('Erro ao conectar. Verifique o backend!');
+  }
+}
+
+function showResponse(text, audioBlob) {
+  addLog('ai', text);
+  state = 'speaking';
+  updateDisplay();
+  startAvatarAnim('speaking');
+  setSubtitle(text);
+
+  if (audioBlob) {
+    const url = URL.createObjectURL(audioBlob);
+    const player = document.getElementById('audio-player');
+    const wrapper = document.getElementById('audio-wrapper');
+    player.src = url;
+    wrapper.className = 'audio-wrapper visible';
+    player.play();
+    player.onended = () => {
+      state = 'idle';
+      updateDisplay();
+      startAvatarAnim('idle');
+      setSubtitle('Pronto! Aperte o botão ou escreva para continuar.');
+    };
+  } else {
+    setTimeout(() => {
+      state = 'idle';
+      updateDisplay();
+      startAvatarAnim('idle');
+      setSubtitle('Pronto! Aperte o botão ou escreva para continuar.');
+    }, Math.max(3000, text.length * 60));
+  }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ========================
+// INICIALIZAÇÃO
+// ========================
+function createParticles() {
+  const container = document.getElementById('particles');
+  for (let i = 0; i < 30; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random() * 100 + '%';
+    p.style.animationDuration = (5 + Math.random() * 10) + 's';
+    p.style.animationDelay = (Math.random() * 10) + 's';
+    p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+    container.appendChild(p);
+  }
+}
+
+window.onload = () => {
+  createParticles();
+  startAvatarAnim('idle');
+  updateDisplay();
+
+  // Tenta conectar backend
+  fetch('http://localhost:8000/')
+    .then(r => r.json())
+    .then(() => addLog('sys', '✅ Backend conectado em localhost:8000'))
+    .catch(() => {
+      mode = 'offline';
+      setMode('offline');
+      addLog('sys', '⚠ Backend offline. Modo OFFLINE ativado automaticamente.');
+    });
+};
+</script>
+</body>
+</html>
