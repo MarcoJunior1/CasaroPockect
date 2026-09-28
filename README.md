@@ -66,5 +66,5 @@ A API estará rodando em `http://localhost:8000`.
 ---
 
 ## 📝 Licença
-Desenvolvido por **Marco Júnior** e assistido por Inteligência Artificial (Antigravity). Livre para modificações e melhorias. 🚀
+Desenvolvido por **Marco Júnior** Livre para modificações e melhorias. 🚀
 
